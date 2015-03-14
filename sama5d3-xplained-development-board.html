@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Brennan's Engineering Thoughts : SAMA5D3 Xplained Development Board</title>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="http://btashton.github.io/blog/theme/css/main.css" type="text/css" />
+        <link href="http://btashton.github.io/blog/" type="application/atom+xml" rel="alternate" title="Brennan's Engineering Thoughts ATOM Feed" />
+
+        <!--[if IE]>
+                <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+
+        <!--[if lte IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="http://btashton.github.io/blog/css/ie.css"/>
+                <script src="http://btashton.github.io/blog/js/IE8.js" type="text/javascript"></script><![endif]-->
+
+        <!--[if lt IE 7]>
+                <link rel="stylesheet" type="text/css" media="all" href="http://btashton.github.io/blog/css/ie6.css"/><![endif]-->
+
+</head>
+
+<body>
+	<div id="wrap" style="width:850px">
+	    <div id="container" style="width:560px">
+
+
+            <div class="entry">
+        
+<header>
+<h1><a href="http://btashton.github.io/blog" id="site-title">  </a>         <a href="http://btashton.github.io/blog/sama5d3-xplained-development-board.html" id="page-title">SAMA5D3 Xplained Development Board</a></h1>
+<time datetime="2015-03-13T00:00:00+01:00">Fri 13 March 2015</time></header>
+<article>
+    <p>One of the projects that I am working on is some improvements to
+the Nuttx network stack, especially adding a primitive netfilter like
+implementation. To do this I wanted to grab a development board with
+two Ethernet interfaces out of the box. The SAMA5D3 Xplained board seemed
+like a good start at a price point of $79, you can check out the features
+<a href="http://www.atmel.com/tools/ATSAMA5D3-XPLD.aspx">here</a>.</p>
+<p>There is also board support for this in Nuttx, so I won't have to worry
+about the initial board bring up (which is really not too bad in Nuttx,
+especially for ARM boards).</p>
+<p>With the board you get a single micro-usb cable which is all you need
+to get the board to boot into Linux.  I know that this board also has
+a few stages of bootloaders which I want to see debug information from
+so I also added and FTDI 3v3 UART cable which happens to plug nicely into
+the UARD header (J23).  You can find one of these cables
+<a href="https://www.sparkfun.com/products/9717">here</a>.</p>
+<p>The board is powered over the micro-usb interface at J6.  My setup looks like
+this (insert photo). Now, just fire up miniterm on the USB-to-UART and you
+will see something like this:</p>
+<div class="highlight"><pre>RomBOOT
+
+
+AT91Bootstrap 3.6.1-00078-g5415d4e (Tue Feb  4 15:36:46 CET 2014)
+
+NAND: ONFI flash detected
+NAND: Manufacturer ID: 0x2c Chip ID: 0x32
+NAND: Disable On-Die ECC
+NAND: Initialize PMECC params, cap: 0x4, sector: 0x200
+NAND: Image: Copy 0x80000 bytes from 0x40000 to 0x26f00000
+NAND: Done to load image
+
+
+U-Boot 2013.07 (Feb 04 2014 - 15:36:32)
+
+CPU: SAMA5D36
+Crystal frequency:       12 MHz
+CPU clock        :      528 MHz
+Master clock     :      132 MHz
+DRAM:  256 MiB
+NAND:  256 MiB
+MMC:   mci: 0, mci: 1
+*** Warning - bad CRC, using default environment
+
+In:    serial
+Out:   serial
+Err:   serial
+Net:   gmac0
+Warning: failed to set MAC address
+, macb0
+Warning: failed to set MAC address
+
+Hit any key to stop autoboot:  0 
+
+NAND read: device 0 offset 0x180000, size 0x80000
+ 524288 bytes read: OK
+
+NAND read: device 0 offset 0x200000, size 0x600000
+Bit flip in data area, byte_pos: 209, bit_pos: 2, 0x7e -&gt; 0x7a
+Bit flip in data area, byte_pos: 59, bit_pos: 3, 0xdd -&gt; 0xd5
+ 6291456 bytes read: OK
+Kernel image @ 0x22000000 [ 0x000000 - 0x33be28 ]
+## Flattened Device Tree blob at 21000000
+   Booting using the fdt blob at 0x21000000
+   Loading Device Tree to 2bb12000, end 2bb1a046 ... OK
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+Booting Linux on physical CPU 0x0
+
+&lt;snip kernel logs&gt;
+
+Poky (Yocto Project Reference Distro) 1.5.1 sama5d3_xplained /dev/ttyS0
+
+sama5d3_xplained login: root
+root@sama5d3_xplained:~#  
+</pre></div>
+
+
+<p>The full log can be found <a href="https://gist.github.com/btashton/41278b7597c7678d8d92">here</a></p>
+<p>At this point you have a bash shell to have Linux fun in.</p>
+<p>Let's take a quick look at what happened here so we can understand what
+is needed to run Nuttx on this board.  There are actually 4 steps that the
+board does through.
+1. It looks to see if a bootloader called AT91Bootstrap is located in Flash.
+In this case if did find it.
+2. AT91Bootstrap is then run. This bootloader takes care of low level hardware
+initialization, including: clocking, PIO, DRAM, NAND flash, serial flash,
+serial EEPROM, SD Card, etc.  The source for this bootloader is located
+<a href="https://github.com/linux4sam/at91bootstrap">here</a> and is actually fairly easy
+to read if you have worked with other ARM SoC. By default this is compiled
+so that it will run the uboot bootloader from DataFlash, but other
+configuration examples exist and are documented in the README file.
+3. U-boot loads. This is the most common embedded bootloader for loading Linux
+anymore, and depending on what support has been compiled in can be quite
+powerful. If we stop the boot process here and examine the U-Boot shell options
+you can see they have enabled a large amount of the U-Boot features.</p>
+<div class="highlight"><pre>Hit any key to stop autoboot:  0 
+U-Boot&gt; ?
+?       - alias for &#39;help&#39;
+base    - print or set address offset
+bdinfo  - print Board Info structure
+boot    - boot default, i.e., run &#39;bootcmd&#39;
+bootd   - boot default, i.e., run &#39;bootcmd&#39;
+bootm   - boot application image from memory
+bootp   - boot image via network using BOOTP/TFTP protocol
+bootz   - boot Linux zImage image from memory
+chpart  - change active partition
+cmp     - memory compare
+coninfo - print console devices and information
+cp      - memory copy
+crc32   - checksum calculation
+dfu     - Device Firmware Upgrade
+dhcp    - boot image via network using DHCP/TFTP protocol
+echo    - echo args to console
+editenv - edit environment variable
+env     - environment handling commands
+exit    - exit script
+ext4load- load binary file from a Ext4 filesystem
+ext4ls  - list files in a directory (default /)
+ext4write- create a file in the root directory
+false   - do nothing, unsuccessfully
+fatinfo - print information about filesystem
+fatload - load binary file from a dos filesystem
+fatls   - list files in a directory (default /)
+fatwrite- write file into a dos filesystem
+fdt     - flattened device tree utility commands
+go      - start application at address &#39;addr&#39;
+help    - print command description/usage
+imxtract- extract a part of a multi-image
+itest   - return true/false on integer compare
+loadb   - load binary file over serial line (kermit mode)
+loady   - load binary file over serial line (ymodem mode)
+loop    - infinite loop on address range
+md      - memory display
+mdio    - MDIO utility commands
+mii     - MII utility commands
+mm      - memory modify (auto-incrementing address)
+mmc     - MMC sub system
+mmcinfo - display MMC info
+mtdparts- define flash/nand partitions
+mtest   - simple RAM read/write test
+mw      - memory write (fill)
+nand    - NAND sub-system
+nboot   - boot from NAND device
+nfs     - boot image via network using NFS protocol
+nm      - memory modify (constant address)
+ping    - send ICMP ECHO_REQUEST to network host
+printenv- print environment variables
+reset   - Perform RESET of the CPU
+run     - run commands in an environment variable
+saveenv - save environment variables to persistent storage
+setenv  - set environment variables
+sf      - SPI flash sub-system
+showvar - print local hushshell variables
+sleep   - delay execution for some time
+source  - run script from memory
+test    - minimal test like /bin/sh
+tftpboot- boot image via network using TFTP protocol
+true    - do nothing, successfully
+ubi     - ubi commands
+ubifsload- load file from an UBIFS filesystem
+ubifsls - list files in a directory
+ubifsmount- mount UBIFS volume
+ubifsumount- unmount UBIFS volume
+usb     - USB sub-system
+usbboot - boot from USB device
+version - print monitor, compiler and linker version
+U-Boot&gt;
+</pre></div>
+
+
+<p>Since this includes all the U-Boot features I see a need for, I will not
+be going into how to rebuild U-Boot, but if you want the source that Atmel is
+using is located <a href="https://github.com/linux4sam/u-boot-at91">here</a>. This
+looks to be close upstream, which is a good thing.  In the past I worked
+with a Samsung SoC (the one used in the early iPhones) and it was a real
+pain to use since they had made large changes to the memory controller code
+both in the Linux Kernel and in U-Boot.  Don't use Samsung SoCs if you can
+avoid it, or are a large enough customer that you will get all the docs
+that are under NDA.</p>
+<p>Let's take a look at what U-Boot is doing by default:</p>
+<div class="highlight"><pre>U-Boot&gt; env print
+baudrate=115200
+bootargs=console=ttyS0,115200 earlyprintk mtdparts=atmel_nand:256k(bootstrap)ro,512k(uboot)ro,256K(env),256k(s
+bootcmd=nand read 0x21000000 0x180000 0x80000;nand read 0x22000000 0x200000 0x600000;bootz 0x22000000 - 0x2100
+bootdelay=3
+ethact=gmac0
+stderr=serial
+stdin=serial
+stdout=serial
+
+Environment size: 427/131067 bytes
+</pre></div>
+
+
+<p>The two lines of interest really are <code>bootargs</code> and <code>bootcmd</code>.  Bootargs is
+passed off to what ever kernel is loaded. Bootcmd is a list of all the U-Boot
+commands that you want it to call, its very much like a bash script.  First
+lets look at the <code>nand</code> commands that are being issued. U-Boot has reasonable
+help system.</p>
+<div class="highlight"><pre>U-Boot&gt; ? nand
+nand - NAND sub-system
+
+Usage:
+nand info - show available NAND devices
+nand device [dev] - show or set current device
+nand read - addr off|partition size
+nand write - addr off|partition size
+    read/write &#39;size&#39; bytes starting at offset &#39;off&#39;
+    to/from memory address &#39;addr&#39;, skipping bad blocks.
+nand read.raw - addr off|partition [count]
+nand write.raw - addr off|partition [count]
+    Use read.raw/write.raw to avoid ECC and access the flash as-is.
+nand write.trimffs - addr off|partition size
+    write &#39;size&#39; bytes starting at offset &#39;off&#39; from memory address
+    &#39;addr&#39;, skipping bad blocks and dropping any pages at the end
+    of eraseblocks that contain only 0xFF
+nand erase[.spread] [clean] off size - erase &#39;size&#39; bytes from offset &#39;off&#39;
+    With &#39;.spread&#39;, erase enough for given file size, otherwise,
+    &#39;size&#39; includes skipped bad blocks.
+nand erase.part [clean] partition - erase entire mtd partition&#39;
+nand erase.chip [clean] - erase entire chip&#39;
+nand bad - show bad blocks
+nand dump[.oob] off - dump page
+nand scrub [-y] off size | scrub.part partition | scrub.chip
+    really clean NAND erasing bad blocks (UNSAFE)
+nand markbad off [...] - mark bad block(s) at offset (UNSAFE)
+nand biterr off - make a bit error at offset (UNSAFE)
+</pre></div>
+
+
+<p>Looking at this we can see that the <code>nand</code> command is really just for memory
+operations on the NAND hardware.  In order to perform the boot, U-Boot is
+loading the kernel image and the kernel device tree into SDRAM/DDRAM before
+issuing the boot command.  The bootz command is used for loading kernel zimage
+files and takes the optional parameter of address of the device tree.</p>
+<div class="highlight"><pre>bootz [addr [initrd[:size]] [fdt]]
+    - boot Linux zImage stored in memory
+        The argument &#39;initrd&#39; is optional and specifies the address
+        of the initrd in memory. The optional argument &#39;:size&#39; allows
+        specifying the size of RAW initrd.
+        When booting a Linux kernel which requires a flat device-tree
+        a third argument is required which is the address of the
+        device-tree blob. To boot that kernel without an initrd image,
+        use a &#39;-&#39; for the second argument. If you do not pass a third
+        a bd_info struct will be passed instead
+</pre></div>
+
+
+<p>If you want to understand a bit more about device trees and how they work,
+check out <a href="http://events.linuxfoundation.org/sites/events/files/slides/petazzoni-device-tree-dummies.pdf">this</a>.</p>
+<p>Device trees have made things way better in the Linux Kernel for embedded
+systems, and if you are doing a kernel build for an embedded board I highly
+recommend learning about it.  Hopefully that gives a quick run down of how
+the boot process works, and will set the stage for later posts.</p>
+</article>
+            </div>
+        </div>
+
+
+        <div id="sidebar">
+            <h1><a href="http://btashton.github.io/blog " title="title">Brennan's Engineering Thoughts</a></h1>
+            <span class="description"> </span>
+            <!-- <span class="feed"><a href="">RSS</a> | <a href="">Atom</a></span> -->
+        </div>
+
+        <div id="footer">
+            <nav>
+                <ul>
+                    <li>:: <a href="http://btashton.github.io/blog/categories.html">Categories</a></li>
+                </ul>
+            </nav>
+
+            <div id="credits">
+                <span>Adapted from <a href="http://wordpress.org/themes/monospace">Monospace</a> || Created with <a href="">Pelican</a></span>
+            </div>
+                
+        </div>
+
+
+    </div>
+
+</body>
+</html>
